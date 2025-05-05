@@ -1,0 +1,7 @@
+path: ./database/car_img 
+
+train: train/img
+val: valid/img
+
+nc: 1
+names: ["car"]
