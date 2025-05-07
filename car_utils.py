@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+import xml.etree.ElementTree as ET
 
 ### PROVA: READ IMAGES ###
 def read_images(path):
@@ -13,6 +14,21 @@ def read_images(path):
         images.append((img, filename))
     return images
 ##########################
+
+def read_xml_files(path):
+    data = []
+    for filename in os.listdir(path):
+        xml_path = os.path.join(path, filename)
+        file = ET.parse(xml_path)
+        data.append(file)
+    return data
+
+def display_bounding_box(image, box, color=(0, 255, 0)):
+    print(box)
+    x1, y1, x2, y2 = box.astype(int) 
+    BoundedImage = image.copy()
+    cv2.rectangle(BoundedImage, (x1, y1), (x2, y2), color=color, thickness=2)
+    return BoundedImage
 
 def read_video(path):
     video = cv2.VideoCapture(path)
