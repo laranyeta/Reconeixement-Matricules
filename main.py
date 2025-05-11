@@ -3,24 +3,26 @@
 # Curs: 2024-2025
 
 from ultralytics import YOLO
-from car_utils import *
+import torch
 
-model = YOLO("yolov8s.pt")
+def main():
+    model = YOLO("yolov8n.pt")
 
-model.train(
-    data = "cardata.yaml",
-    epochs=50,
-    imgsz=640,
-    batch=16,
-    name="car_detection",
-    project="runs/",
+    results = model.train(
+    data="config.yaml",
+    epochs=15,          # Entrenament curt però útil
+    imgsz=416,          # Imatges més petites per fer-ho més ràpid
+    batch=8,            # Ajusta si tens més VRAM
+    device=0,           # GPU
+    cache=True,         # Carrega imatges a RAM
+    workers=4,          # Accelerar la càrrega de dades
+    project="runs/train_fast",
+    name="yolov8n_cotxes"
 )
-
-test = read_images("database/car_img/test")
-
-for img, filename in test:
-    detections = detect_car([img], model)
-    cv2.imwrite("detections/car_{filename}")
+    infer = YOLO("runs/train_fast/yolov8n_cotxes/weights/best.pt")
+    results = infer.predict("database/car_img/images/val/IMG_0973_jpg.rf.f7a6938e4d94b23a29f7c50020c6f2bd.jpg",save=True)
+if __name__ == "__main__":
+    main()
 
 
 
