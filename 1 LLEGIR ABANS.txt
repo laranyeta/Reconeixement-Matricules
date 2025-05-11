@@ -1,0 +1,7 @@
+la base de dades ha de ser tipus
+
+database > car_img > labels > train
+database > car_img > labels > val
+
+database > car_img > images > train
+database > car_img > images > val
