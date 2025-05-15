@@ -18,76 +18,67 @@ def getBoundingBoxError(bound, gt):
     diff = diff * diff 
     sumSquares= diff.sum()
     return np.sqrt(  sumSquares) 
+import cv2
+import numpy as np
 
-def detect_plate(img, debug=False):
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+# 1. PREPROCESADO
+def preprocess(image):
+    # 1.1 Escala de grises
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)  # :contentReference[oaicite:10]{index=10}
+    # 1.2 Suavizado Gaussian
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)     # :contentReference[oaicite:11]{index=11}
+    # 1.3 Ecualización de histograma
+    equalized = cv2.equalizeHist(blurred)           # :contentReference[oaicite:12]{index=12}
+    return equalized
 
-    # Operación blackhat para resaltar texto oscuro sobre fondo claro
-    rectKern = cv2.getStructuringElement(cv2.MORPH_RECT, (13,5))
-    # blackhat = cv2.morphologyEx(gray, cv2.MORPH_BLACKHAT, rectKern)
+# 2. LOCALIZACIÓN DE MATRÍCULA
+def locate_plate(pre):
+   import cv2
+import numpy as np
 
-    # Umbral para extraer regiones claras (potenciales placas)
-    # _, light = cv2.threshold(blackhat, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+def locate_plate(image):
 
-    # Mejorar bordes con gradiente X
-    gradX = cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=-1)
-    gradX = cv2.convertScaleAbs(gradX)
-    gradX = cv2.GaussianBlur(gradX, (5,5), 0)
-    gradX = cv2.morphologyEx(gradX, cv2.MORPH_CLOSE, rectKern)
-    _, thresh = cv2.threshold(gradX, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+    # 3. Perform Canny edge detection
+    edges = cv2.Canny(image, 50, 150)
 
-   
-    if (debug):
-        # plt.imshow(cv2.cvtColor(light, cv2.COLOR_BGR2RGB))
-        # plt.axis('off')
-        # plt.show()
-        plt.imshow(cv2.cvtColor(thresh, cv2.COLOR_BGR2RGB))
-        plt.axis('off')
-        plt.show()
-
-
-    # Limpiar la máscara resultante
-    thresh = cv2.erode(thresh, None, iterations=2)
-    thresh = cv2.dilate(thresh, None, iterations=2)
-
-    # Encontrar contornos y filtrar por forma de matrícula
-    contornos, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    plate_cnt = None
-    
-    if (debug):
-        
-        approx_cnt = []
-        for i, cnt in enumerate(contornos):
-            epsilon = 0.02 * cv2.arcLength(cnt, True)
-            approx_cnt.append(cv2.approxPolyDP(cnt, epsilon, True))
-        drawed = cv2.drawContours(img.copy(), contornos, -1, (0, 255, 0), 3)
-        drawed_aprox = cv2.drawContours(img.copy(), approx_cnt, -1, (0, 255, 0), 3)
-        plt.imshow(cv2.cvtColor(drawed_aprox, cv2.COLOR_BGR2RGB))
-        plt.axis('off')
-        plt.show()
-        plt.imshow(cv2.cvtColor(drawed, cv2.COLOR_BGR2RGB))
-        plt.axis('off')
-        plt.show()
-        
-    
-    for c in sorted(contornos, key=cv2.contourArea, reverse=True):
-        x,y,w,h = cv2.boundingRect(c)
-        ar = w/float(h)
-        if 2.5 < ar < 5.0 and w*h > 1000:  
-            plate_cnt = c
-            break
-    if plate_cnt is None:
+    # 4. Detect lines using Probabilistic Hough Transform
+    lines = cv2.HoughLinesP(edges,
+                            rho=1,
+                            theta=np.pi / 180,
+                            threshold=50,
+                            minLineLength=50,
+                            maxLineGap=10)
+    if lines is None:
         return None
-    
 
-    if (debug):
-        drawed = cv2.drawContours(img.copy(), [plate_cnt], -1, (0, 255, 0), 3)
-        plt.imshow(cv2.cvtColor(drawed, cv2.COLOR_BGR2RGB))
-        plt.axis('off')
-        plt.show()
-    return cv2.boundingRect(plate_cnt)
+    # 5. Create a blank image to draw lines
+    line_img = np.zeros_like(edges)
 
-def test_algorithm():
+    # 6. Draw the detected lines on the blank image
+    for x1, y1, x2, y2 in lines[:, 0]:
+        cv2.line(line_img, (x1, y1), (x2, y2), 255, 2)
+
+    # 7. Find contours from the line image
+    contours, _ = cv2.findContours(line_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    # 8. Loop through contours to find potential license plate regions
+    for cnt in contours:
+        x, y, w, h = cv2.boundingRect(cnt)
+        aspect_ratio = w / float(h)
+        area = w * h
+        if 2 < aspect_ratio < 6 and area > 1000:
+            return np.array([x, y, x + w, y + h])  # Return the bounding box coordinates
+
+    return None
+
+
+def detect_plate(image, debug=False):
+    preprocessed = preprocess(image)
+    plate_bounds = locate_plate(preprocessed)
+    return plate_bounds
+
+
+def test_algorithm(save=False):
     images = read_images('database/plates/images/')
     gt = read_xml_files('database/plates/annotations/')
 
@@ -102,6 +93,8 @@ def test_algorithm():
             bound = np.array(bound)
             detected_bounds[i] = bound
             errors[i] = getBoundingBoxError(bound, imgGt)
+            if save:
+                save_test_results(img[0], bound, imgGt, errors[i])  
 
     detected_errors = errors[errors != -1]
     failed = errors[errors == -1]
@@ -132,10 +125,16 @@ def test_algorithm():
     ax[1].axis('off')
     plt.show()
 
+def save_test_results(image, detected, gt, error):
+    detected = display_bounding_box(image, detected, color=(255, 0, 0))
+    detected = display_bounding_box(detected, gt, color=(0, 255, 0))
+    cv2.imwrite(f"test_results/{error:.2f}.jpg", detected)
+    print(f"Saved test result with error: {error:.2f}")
+
 if __name__ == "__main__":
     # images = read_images('database/plates/images/')
     # gt = read_xml_files('database/plates/annotations/')
 
     # print(images.__len__())
     # bondingBox = detect_plate(images[412][0], debug=True)
-    test_algorithm()
+    test_algorithm(True)
