@@ -2,7 +2,6 @@
 # Autors: Pau Bofill, Lara Castillejo, Júlia Lipin Gener
 # Curs: 2024-2025
 
-
 import cv2
 from matplotlib import pyplot as plt
 from car_utils import *
@@ -20,40 +19,75 @@ def getBoundingBoxError(bound, gt):
     sumSquares= diff.sum()
     return np.sqrt(  sumSquares) 
 
-def detect_plate(img):
+def detect_plate(img, debug=False):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
     # Operación blackhat para resaltar texto oscuro sobre fondo claro
     rectKern = cv2.getStructuringElement(cv2.MORPH_RECT, (13,5))
-    blackhat = cv2.morphologyEx(gray, cv2.MORPH_BLACKHAT, rectKern)
+    # blackhat = cv2.morphologyEx(gray, cv2.MORPH_BLACKHAT, rectKern)
 
     # Umbral para extraer regiones claras (potenciales placas)
-    _, light = cv2.threshold(blackhat, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+    # _, light = cv2.threshold(blackhat, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
 
     # Mejorar bordes con gradiente X
-    gradX = cv2.Sobel(blackhat, cv2.CV_32F, 1, 0, ksize=-1)
+    gradX = cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=-1)
     gradX = cv2.convertScaleAbs(gradX)
     gradX = cv2.GaussianBlur(gradX, (5,5), 0)
     gradX = cv2.morphologyEx(gradX, cv2.MORPH_CLOSE, rectKern)
     _, thresh = cv2.threshold(gradX, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
 
+   
+    if (debug):
+        # plt.imshow(cv2.cvtColor(light, cv2.COLOR_BGR2RGB))
+        # plt.axis('off')
+        # plt.show()
+        plt.imshow(cv2.cvtColor(thresh, cv2.COLOR_BGR2RGB))
+        plt.axis('off')
+        plt.show()
+
+
     # Limpiar la máscara resultante
     thresh = cv2.erode(thresh, None, iterations=2)
     thresh = cv2.dilate(thresh, None, iterations=2)
+
     # Encontrar contornos y filtrar por forma de matrícula
     contornos, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     plate_cnt = None
+    
+    if (debug):
+        
+        approx_cnt = []
+        for i, cnt in enumerate(contornos):
+            epsilon = 0.02 * cv2.arcLength(cnt, True)
+            approx_cnt.append(cv2.approxPolyDP(cnt, epsilon, True))
+        drawed = cv2.drawContours(img.copy(), contornos, -1, (0, 255, 0), 3)
+        drawed_aprox = cv2.drawContours(img.copy(), approx_cnt, -1, (0, 255, 0), 3)
+        plt.imshow(cv2.cvtColor(drawed_aprox, cv2.COLOR_BGR2RGB))
+        plt.axis('off')
+        plt.show()
+        plt.imshow(cv2.cvtColor(drawed, cv2.COLOR_BGR2RGB))
+        plt.axis('off')
+        plt.show()
+        
+    
     for c in sorted(contornos, key=cv2.contourArea, reverse=True):
         x,y,w,h = cv2.boundingRect(c)
         ar = w/float(h)
-        if 2.5 < ar < 5.0 and w*h > 1000:  # ajustar condiciones según escenario
+        if 2.5 < ar < 5.0 and w*h > 1000:  
             plate_cnt = c
             break
     if plate_cnt is None:
         return None
+    
+
+    if (debug):
+        drawed = cv2.drawContours(img.copy(), [plate_cnt], -1, (0, 255, 0), 3)
+        plt.imshow(cv2.cvtColor(drawed, cv2.COLOR_BGR2RGB))
+        plt.axis('off')
+        plt.show()
     return cv2.boundingRect(plate_cnt)
 
-if __name__ == "__main__":
+def test_algorithm():
     images = read_images('database/plates/images/')
     gt = read_xml_files('database/plates/annotations/')
 
@@ -72,7 +106,7 @@ if __name__ == "__main__":
     detected_errors = errors[errors != -1]
     failed = errors[errors == -1]
     print (f"Average error: {errors.mean():.2f}")
-    print (f"Failed images: {failed.__len__()}")    
+    print (f"Failed images: {failed.__len__() // errors.__len__() * 100:.2f}%")    
 
     max_error = errors.argmax()
 
@@ -82,11 +116,11 @@ if __name__ == "__main__":
 
     min_error = forMin_error.argmin()
 
-    detected_bound_min = display_bounding_box(images[min_error][0], detected_bounds[min_error], color=(255, 255, 0))
-    detected_bound_min = display_bounding_box(detected_bound_min, extract_gt_xml_data(gt[min_error]), color=(255, 255, 0))
+    detected_bound_min = display_bounding_box(images[min_error][0], detected_bounds[min_error], color=(255, 0, 0))
+    detected_bound_min = display_bounding_box(detected_bound_min, extract_gt_xml_data(gt[min_error]), color=(0, 255, 0))
 
-    detected_bound_max = display_bounding_box(images[max_error][0], detected_bounds[max_error])
-    detected_bound_max = display_bounding_box(detected_bound_max, extract_gt_xml_data(gt[max_error]))
+    detected_bound_max = display_bounding_box(images[max_error][0], detected_bounds[max_error], color=(255, 0, 0))
+    detected_bound_max = display_bounding_box(detected_bound_max, extract_gt_xml_data(gt[max_error]), color=(0, 255, 0))
 
 
     fig, ax = plt.subplots(1, 2)
@@ -97,3 +131,11 @@ if __name__ == "__main__":
     ax[1].set_title(f"Min error: {errors[min_error]:.2f}")
     ax[1].axis('off')
     plt.show()
+
+if __name__ == "__main__":
+    # images = read_images('database/plates/images/')
+    # gt = read_xml_files('database/plates/annotations/')
+
+    # print(images.__len__())
+    # bondingBox = detect_plate(images[412][0], debug=True)
+    test_algorithm()
