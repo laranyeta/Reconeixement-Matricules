@@ -35,23 +35,21 @@ def read_video(path):
 
 def display_bounding_box(image, box, color=(0, 255, 0)):
     print(box)
-    x1, y1, x2, y2 = box.astype(int) 
+    x1, y1, x2, y2 = map(int, box)
     BoundedImage = image.copy()
     cv2.rectangle(BoundedImage, (x1, y1), (x2, y2), color=color, thickness=2)
     return BoundedImage
-
-def plate_to_text(model, results):
-    boxes = results[0].boxes
-    class_ids = boxes.cls.cpu().numpy()
-    coords = boxes.xyxy.cpu().numpy()
-    names = model.names #retorna el nom de cada classe
-
-    detections = [] #llista de caracters detectats
-    for cls_id, coord in zip(class_ids, coords):
-        x1 = coord[0]
-        char = names[int(cls_id)]
-        detections.append((x1, char))
-    detections.sort(key=lambda x: x[0]) #ordenar per coordenada x (horitzontal)
-    plate_text = ''.join([char for _, char in detections]) #reconstruir matricula
-    return plate_text
     
+def crop_car(result, image):
+    box = result[0].boxes[0]
+    x1, y1, x2, y2 = box.xyxy[0].tolist()
+    x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+    cropped_img = image[y1:y2, x1:x2]
+    return cropped_img
+
+def crop_plate(bounding_box, image):
+    if bounding_box is not None:
+        x1, y1, x2, y2 = map(int, bounding_box)
+        cropped_plate = image[y1:y2, x1:x2]
+        return cropped_plate
+
