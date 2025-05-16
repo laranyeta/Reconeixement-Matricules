@@ -13,14 +13,24 @@ def extract_gt_xml_data(gt):
             int(gt.find('object').find('bndbox').find('xmax').text),
             int(gt.find('object').find('bndbox').find('ymax').text)])
     
+def getBoundingBoxScore(boxA, boxB):
+    xA = max(boxA[1], boxB[0])
+    yA = max(boxA[1], boxB[1])
+    xB = min(boxA[2], boxB[2])
+    yB = min(boxA[3], boxB[3])
+
+    interArea = max(0, xB - xA) * max(0, yB - yA)
+
+    boxAArea = (boxA[2] - boxA[0]) * (boxA[3] - boxA[1])
+    boxBArea = (boxB[2] - boxB[0]) * (boxB[3] - boxB[1])
+
+    iou = interArea / float(boxAArea + boxBArea - interArea + 1e-6)
+    return iou
 def getBoundingBoxError(bound, gt):
     diff = bound - gt
     diff = diff * diff 
     sumSquares= diff.sum()
     return np.sqrt(  sumSquares) 
-import cv2
-import numpy as np
-
 # 1. PREPROCESADO
 def preprocess(image):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)  
@@ -57,7 +67,7 @@ def score_contour(cnt):
     if 2 < aspect_ratio < 6 and area > 1000:
         # Favor aspect ratio ~4 (typical for plates), high density
         score = (
-            -abs(aspect_ratio - 4) * 2     # penalize deviation from ideal aspect ratio
+            -abs(aspect_ratio - 4) * 3     # penalize deviation from ideal aspect ratio
             + density * 10                 # reward tight contours
             + min(area / 5000, 1) * 2      # reward reasonable area size
         )
@@ -162,6 +172,7 @@ def test_algorithm(save=False, debug=False):
     images = read_images('database/plates/images/')
     gt = read_xml_files('database/plates/annotations/')
 
+    scores= np.zeros(images.__len__())-1
     errors = np.zeros(images.__len__())-1
     detected_bounds = np.zeros((images.__len__(), 4))
     for i, img in enumerate(images):
@@ -172,14 +183,18 @@ def test_algorithm(save=False, debug=False):
         if bound is not None:
             bound = np.array(bound)
             detected_bounds[i] = bound
-            errors[i] = getBoundingBoxError(bound, imgGt)
+            errors[i] =  getBoundingBoxError(bound, imgGt)
+            scores[i] = getBoundingBoxScore(bound, imgGt)
             if save:
-                save_test_results(img[0], bound, imgGt, errors[i])  
+                save_test_results(img[0], bound, imgGt, errors[i],i)  
 
     detected_errors = errors[errors != -1]
-    failed = errors[errors == -1]
-    print (f"Average error: {errors.mean():.2f}")
-    print (f"Failed images: {failed.__len__() // errors.__len__() * 100:.2f}%")    
+    failed = scores != 0
+
+    errors_clean = errors[failed]
+
+    print (f"Average error: {errors_clean.mean():.2f}")
+    print (f"Failed images: {failed.sum()}")    
 
     max_error = errors.argmax()
 
@@ -205,10 +220,10 @@ def test_algorithm(save=False, debug=False):
     ax[1].axis('off')
     plt.show()
 
-def save_test_results(image, detected, gt, error):
+def save_test_results(image, detected, gt, error,index):
     detected = display_bounding_box(image, detected, color=(255, 0, 0))
     detected = display_bounding_box(detected, gt, color=(0, 255, 0))
-    cv2.imwrite(f"test_results/{error:.2f}.jpg", detected)
+    cv2.imwrite(f"test_results/{error:.2f}-image{index}.jpg", detected)
     print(f"Saved test result with error: {error:.2f}")
 
 if __name__ == "__main__":
