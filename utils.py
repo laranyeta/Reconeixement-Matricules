@@ -1,3 +1,9 @@
+######################################
+### FUNCIONS UTILS PER AL PROJECTE ###
+######################################
+''' Aquest script inclou funcions auxiliars
+    utilitzades de forma general al projecte
+'''
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
@@ -12,7 +18,7 @@ def read_images(path):
         images.append((img, filename))
     return images
 
-def read_xml_files(path):
+def read_xml_files(path): #lectura anotacions de les matricules
     data = []
     for filename in os.listdir(path):
         xml_path = os.path.join(path, filename)
@@ -20,26 +26,13 @@ def read_xml_files(path):
         data.append(file)
     return data
 
-def read_video(path):
-    video = cv2.VideoCapture(path)
-    frames = []
-
-    while True: #mentre hi hagi frames -> extraiem frames
-        flag, frame_bgr = video.read() #flag indica si hi ha frames (1) o no (0)
-        frame_bw = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
-        if not flag:
-            break
-        frames.append(frame_bw)
-    video.release()
-    return frames
-
 def display_bounding_box(image, box, color=(0, 255, 0)):
     print(box)
     x1, y1, x2, y2 = map(int, box)
     BoundedImage = image.copy()
     cv2.rectangle(BoundedImage, (x1, y1), (x2, y2), color=color, thickness=2)
     return BoundedImage
-    
+
 def crop_car(result, image):
     box = result[0].boxes[0]
     x1, y1, x2, y2 = box.xyxy[0].tolist()

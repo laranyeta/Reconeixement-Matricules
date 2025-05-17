@@ -1,7 +1,9 @@
-############### RECONEIXEMENT DE MATRÍCULES DE VEHICLES #####################
-# Autors: Pau Bofill, Lara Castillejo, Júlia Lipin Gener
-# Curs: 2024-2025
-
+#########################################
+### LOCALITZACIÓ MATRICULES (CLASSIC) ###
+#########################################
+''' Aquest script inclou
+    funcions utilitzades en aquesta fase 
+'''
 import cv2
 from matplotlib import pyplot as plt
 from utils import *
@@ -14,7 +16,7 @@ def extract_gt_xml_data(gt):
             int(gt.find('object').find('bndbox').find('ymax').text)])
     
 def getBoundingBoxScore(boxA, boxB):
-    xA = max(boxA[1], boxB[0])
+    xA = max(boxA[0], boxB[0])
     yA = max(boxA[1], boxB[1])
     xB = min(boxA[2], boxB[2])
     yB = min(boxA[3], boxB[3])
@@ -31,31 +33,22 @@ def getBoundingBoxError(bound, gt):
     diff = diff * diff 
     sumSquares= diff.sum()
     return np.sqrt(  sumSquares) 
-# 1. PREPROCESADO
+
+# PREPROCESSAT
 def preprocess(image):
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)  
-    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-    equalized = cv2.equalizeHist(blurred)           
-    return equalized
-
-def preprocess_1(image):
-   # 1. Read and convert
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-    # Enhance contrast using CLAHE
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)) #enfatitzar contrast
     enhanced = clahe.apply(gray)
 
-    # Gamma correction
     gamma = 1.5
     look_up = np.array([((i / 255.0) ** (1.0 / gamma)) * 255 for i in range(256)], dtype="uint8")
-    adjusted = cv2.LUT(enhanced, look_up)
+    adjusted = cv2.LUT(enhanced, look_up) #correccio gamma
 
-    # Denoising
-    blurred = cv2.bilateralFilter(adjusted, d=9, sigmaColor=75, sigmaSpace=75)
+    blurred = cv2.bilateralFilter(adjusted, d=9, sigmaColor=75, sigmaSpace=75) #treure soroll a la img
 
     return blurred
 
+# CALCULAR SCORE DELS CONTORNS
 def score_contour(cnt):
     x, y, w, h = cv2.boundingRect(cnt)
     aspect_ratio = w / float(h)
@@ -63,44 +56,37 @@ def score_contour(cnt):
     contour_area = cv2.contourArea(cnt)
     density = contour_area / area if area > 0 else 0
 
-    # Define score weights
     if 2 < aspect_ratio < 6 and area > 1000:
-        # Favor aspect ratio ~4 (typical for plates), high density
         score = (
-            -abs(aspect_ratio - 4) * 3     # penalize deviation from ideal aspect ratio
-            + density * 10                 # reward tight contours
-            + min(area / 5000, 1) * 2      # reward reasonable area size
+            -abs(aspect_ratio - 4) * 3     #penalitza -> ratio no coincideix
+            + density * 10                 #guanya -> contorns marcats
+            + min(area / 5000, 1) * 2      #guanya -> area considerable
         )
         return score, (x, y, x + w, y + h)
     return -1, None
 
+def preprocess_sobel(image): #treballa millor en contrasts!
+    if len(image.shape) == 3 and image.shape[2] == 3:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = image.copy()
 
+    sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3) #aplicar sobel en vertical (negre sobre blanc)
+    abs_sobelx = np.absolute(sobelx)
+    scaled = np.uint8(255 * abs_sobelx / np.max(abs_sobelx))
+
+    _, thr = cv2.threshold(scaled, 50, 255, cv2.THRESH_BINARY)
+
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (17, 5)) #apliquem morfo matematica (close per unificar contorns)
+    closed = cv2.morphologyEx(thr, cv2.MORPH_CLOSE, kernel)
+
+    return closed
+
+#LOCALITZAR MATRICULA (APLICANT SOBEL)
 def locate_plate(image, showProcess=False):
-
-    # 3. Perform Canny edge detection
-    edges = cv2.Canny(image, 50, 150)
-
-    # 4. Detect lines using Probabilistic Hough Transform
-    lines = cv2.HoughLinesP(edges,
-                            rho=1,
-                            theta=np.pi / 180,
-                            threshold=80,
-                            minLineLength=70,
-                            maxLineGap=15)
-    if lines is None:
-        return None
-
-    # 5. Create a blank image to draw lines
-    line_img = np.zeros_like(edges)
-
-    # 6. Draw the detected lines on the blank image
-    for x1, y1, x2, y2 in lines[:, 0]:
-        cv2.line(line_img, (x1, y1), (x2, y2), 255, 2)
-
-    # 7. Find contours from the line image
+    edges = preprocess_sobel(image)
     contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-    # 8. Loop through contours to find potential license plate regions
     scores = np.zeros(len(contours))
     bounds = np.zeros((len(contours), 4))
     for i, cnt in enumerate(contours):
@@ -109,36 +95,28 @@ def locate_plate(image, showProcess=False):
         if bound is not None:
             bounds[i] = bound
 
-    # 9. Find the contour with the highest score
     best_index = np.argmax(scores) 
     best_score = scores[best_index]
     best_bound = bounds[best_index]
 
     if showProcess:
-        fig, ax = plt.subplots(1, 4 )
+        fig, ax = plt.subplots(1, 4)
 
-        after_canny = cv2.Canny(image, 50, 150)
-        after_canny = cv2.cvtColor(after_canny, cv2.COLOR_GRAY2BGR)
-        # 1. Image after Canny edge detection with hough lines
-        for x1, y1, x2, y2 in lines[:, 0]:
-            cv2.line(after_canny, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        sobel_viz = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
 
-        #image with all contours 
-        countours_img = image.copy()
+        contours_img = image.copy()
         for cnt in contours:
-            cv2.drawContours(countours_img, [cnt], -1, (0, 255, 0), 2)
-        
+            cv2.drawContours(contours_img, [cnt], -1, (0, 255, 0), 2) #dibuixa contorns de la matricula
 
-        # 2. Image with the best bounding box
         best_img = image.copy()
         if best_bound is not None:
             x1, y1, x2, y2 = best_bound.astype(int)
-            cv2.rectangle(best_img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.rectangle(best_img, (x1, y1), (x2, y2), (0, 255, 0), 2) #agafa el millor bounding box
 
-        ax[0].imshow(after_canny )
-        ax[0].set_title('Canny + Hough Lines')
+        ax[0].imshow(sobel_viz)
+        ax[0].set_title('Sobel + Morph')
         ax[0].axis('off')
-        ax[1].imshow(countours_img, 'gray')
+        ax[1].imshow(contours_img, 'gray')
         ax[1].set_title('Contours')
         ax[1].axis('off')
         ax[2].imshow(best_img, 'gray')
@@ -150,24 +128,24 @@ def locate_plate(image, showProcess=False):
 
         manager = plt.get_current_fig_manager()
         try:
-            manager.window.showMaximized()  # Qt5Agg backend
+            manager.window.showMaximized()
         except AttributeError:
             try:
-                manager.window.state('zoomed')  # TkAgg backend on Windows
+                manager.window.state('zoomed')
             except Exception as e:
                 print("Maximize not supported:", e)
 
         plt.show()
-    return best_bound if best_score > 0 else None
 
+    return best_bound if best_score > 0 else None #nomes retorna si hi ha un bounding box acceptable
 
-
+# DETECCIÓ MATRICULA (cridant funcions anteriors)
 def detect_plate(image, debug=False):
-    preprocessed = preprocess_1(image)
+    preprocessed = preprocess(image)
     plate_bounds = locate_plate(preprocessed, debug)
     return plate_bounds
 
-
+# FUNCIO DE TEST DE L'ALGORISME CREAT
 def test_algorithm(save=False, debug=False):
     images = read_images('database/plates/images/')
     gt = read_xml_files('database/plates/annotations/')
@@ -193,12 +171,11 @@ def test_algorithm(save=False, debug=False):
 
     errors_clean = errors[failed]
 
-    print (f"Average error: {errors_clean.mean():.2f}")
-    print (f"Failed images: {failed.sum()}")    
+    print (f"Error mitja: {errors_clean.mean():.2f}")
+    print (f"Imatges fallades: {failed.sum()}")    
 
     max_error = errors.argmax()
 
-    #Set the error to a high value to avoid it being selected as the best one
     forMin_error = errors
     forMin_error[forMin_error == -1] = 10000
 
@@ -224,8 +201,9 @@ def save_test_results(image, detected, gt, error,index):
     detected = display_bounding_box(image, detected, color=(255, 0, 0))
     detected = display_bounding_box(detected, gt, color=(0, 255, 0))
     cv2.imwrite(f"test_results/{error:.2f}-image{index}.jpg", detected)
-    print(f"Saved test result with error: {error:.2f}")
+    print(f"S'ha guardat el test amb error: {error:.2f}")
 
+# PROVA DE TEST
 if __name__ == "__main__":
     # images = read_images('database/plates/images/')
     # gt = read_xml_files('database/plates/annotations/')
