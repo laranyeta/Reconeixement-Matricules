@@ -3,7 +3,6 @@
 #####################################
 
 from ultralytics import YOLO
-import torch
 
 model = YOLO("models/yolov8n.pt")
 

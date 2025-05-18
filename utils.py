@@ -5,8 +5,6 @@
     utilitzades de forma general al projecte
 '''
 import cv2
-import numpy as np
-import matplotlib.pyplot as plt
 import os
 import xml.etree.ElementTree as ET
 

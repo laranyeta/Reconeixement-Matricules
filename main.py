@@ -11,12 +11,10 @@ from plate_detection import *
 from plate_ocr_recog import *
 from utils import *
 import cv2
-import numpy as np
 import matplotlib.pyplot as plt
-import os
 
 # MOSTRAR IMATGE AGAFADA DE TEST
-img = cv2.imread("test/test3.jpg") #canviar per escollir imatge de test
+img = cv2.imread("test/test2.jpg") #canviar per escollir imatge de test
 plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
 plt.title("Cotxe escollit per a la detecció")
 plt.axis('off')
@@ -24,9 +22,9 @@ plt.show()
 
 # DETECCIO DE COTXES
 model_cotxe = YOLO("car_yolo/runs/train_fast/yolov8n_cotxes2/weights/best.pt")
-result_cotxe = model_cotxe.predict("test/test3.jpg", save=True, imgsz=416) #canviar per escollir imatge de test
+result_cotxe = model_cotxe.predict("test/test2.jpg", save=True, imgsz=416) #canviar per escollir imatge de test
 
-detected_car = cv2.imread("runs/detect/predict/test3.jpg") #canviar per escollir imatge de test (tmb canviar directori predict o esborrar-los de runs/detect)
+detected_car = cv2.imread("runs/detect/predict/test2.jpg") #canviar per escollir imatge de test (tmb canviar directori predict o esborrar-los de runs/detect)
 cropped_car = crop_car(result_cotxe, detected_car)
 cv2.imwrite("output/img/cropped_car.jpg", cropped_car)
 
