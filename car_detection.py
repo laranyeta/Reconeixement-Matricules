@@ -2,8 +2,7 @@
 ### CAR DETECTION (DEEP LEARNING) ###
 #####################################
 
-from ultralytics import YOLO
-import torch
+from ultralytics.models import YOLO
 
 model = YOLO("models/yolov8n.pt")
 
