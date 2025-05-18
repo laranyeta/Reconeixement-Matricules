@@ -59,7 +59,7 @@ def score_contour(cnt):
     if 2 < aspect_ratio < 6 and area > 1000:
         score = (
             -abs(aspect_ratio - 4) * 3     #penalitza -> ratio no coincideix
-            + density * 10                 #guanya -> contorns marcats
+            + density * 10                 #guanya -> Densitat de contrns dins de la area 
             + min(area / 5000, 1) * 2      #guanya -> area considerable
         )
         return score, (x, y, x + w, y + h)
@@ -98,46 +98,54 @@ def locate_plate(image, showProcess=False):
     best_index = np.argmax(scores) 
     best_score = scores[best_index]
     best_bound = bounds[best_index]
-
     if showProcess:
-        fig, ax = plt.subplots(1, 4)
-
-        sobel_viz = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
-
-        contours_img = image.copy()
-        for cnt in contours:
-            cv2.drawContours(contours_img, [cnt], -1, (0, 255, 0), 2) #dibuixa contorns de la matricula
-
-        best_img = image.copy()
-        if best_bound is not None:
-            x1, y1, x2, y2 = best_bound.astype(int)
-            cv2.rectangle(best_img, (x1, y1), (x2, y2), (0, 255, 0), 2) #agafa el millor bounding box
-
-        ax[0].imshow(sobel_viz)
-        ax[0].set_title('Sobel + Morph')
-        ax[0].axis('off')
-        ax[1].imshow(contours_img, 'gray')
-        ax[1].set_title('Contours')
-        ax[1].axis('off')
-        ax[2].imshow(best_img, 'gray')
-        ax[2].set_title('Best Bounding Box')
-        ax[2].axis('off')
-        ax[3].imshow(image, 'gray')
-        ax[3].set_title('Original Image')
-        ax[3].axis('off')
-
-        manager = plt.get_current_fig_manager()
-        try:
-            manager.window.showMaximized()
-        except AttributeError:
-            try:
-                manager.window.state('zoomed')
-            except Exception as e:
-                print("Maximize not supported:", e)
-
-        plt.show()
-
+        showProcess(edges, contours, image, best_bound)
     return best_bound if best_score > 0 else None #nomes retorna si hi ha un bounding box acceptable
+
+def showProcess(edges, contours, image, best_bound):
+    fig, ax = plt.subplots(1, 4)
+
+    sobel_viz = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
+
+    contours_img = image.copy()
+    for cnt in contours:
+        cv2.drawContours(contours_img, [cnt], -1, (0, 255, 0), 2) #dibuixa contorns de la matricula
+
+    best_img = image.copy()
+    if best_bound is not None:
+        x1, y1, x2, y2 = best_bound.astype(int)
+        cv2.rectangle(best_img, (x1, y1), (x2, y2), (0, 255, 0), 2) #agafa el millor bounding box
+
+    ax[0].imshow(sobel_viz)
+    ax[0].set_title('Sobel + Morph')
+    ax[0].axis('off')
+    ax[1].imshow(contours_img, 'gray')
+    ax[1].set_title('Contours')
+    ax[1].axis('off')
+    ax[2].imshow(best_img, 'gray')
+    ax[2].set_title('Best Bounding Box')
+    ax[2].axis('off')
+    ax[3].imshow(image, 'gray')
+    ax[3].set_title('Original Image')
+    ax[3].axis('off')
+
+    manager = plt.get_current_fig_manager()
+    try:
+        manager.window.showMaximized()
+    except AttributeError:
+        try:
+            manager.window.state('zoomed')
+        except Exception as e:
+            print("Maximize not supported:", e)
+
+    plt.show()
+
+
+def save_test_results(image, detected, gt, error,index):
+    detected = display_bounding_box(image, detected, color=(255, 0, 0))
+    detected = display_bounding_box(detected, gt, color=(0, 255, 0))
+    cv2.imwrite(f"test_results/{error:.2f}-image{index}.jpg", detected)
+    print(f"S'ha guardat el test amb error: {error:.2f}")
 
 # DETECCIÓ MATRICULA (cridant funcions anteriors)
 def detect_plate(image, debug=False):
@@ -197,11 +205,6 @@ def test_algorithm(save=False, debug=False):
     ax[1].axis('off')
     plt.show()
 
-def save_test_results(image, detected, gt, error,index):
-    detected = display_bounding_box(image, detected, color=(255, 0, 0))
-    detected = display_bounding_box(detected, gt, color=(0, 255, 0))
-    cv2.imwrite(f"test_results/{error:.2f}-image{index}.jpg", detected)
-    print(f"S'ha guardat el test amb error: {error:.2f}")
 
 # PROVA DE TEST
 if __name__ == "__main__":

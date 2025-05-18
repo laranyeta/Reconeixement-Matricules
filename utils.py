@@ -10,6 +10,13 @@ import matplotlib.pyplot as plt
 import os
 import xml.etree.ElementTree as ET
 
+def get_images(path):
+    images = []
+    for filename in os.listdir(path):
+        img_path = os.path.join(path, filename)
+        img = cv2.imread(img_path)
+        images.append(img)
+    return images
 def read_images(path):
     images = []
     for filename in os.listdir(path):
