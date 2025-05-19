@@ -2,3 +2,6 @@ __pycache__/*
 output/*
 runs/*
 output/
+test_results/*
+database/*
+datasets/*

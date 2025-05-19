@@ -32,6 +32,13 @@ def read_xml_files(path): #lectura anotacions de les matricules
         file = ET.parse(xml_path)
         data.append(file)
     return data
+def read_txt_files(path): #lectura anotacions de les matricules
+    data = []
+    for filename in os.listdir(path):
+        with open(os.path.join(path, filename), 'r') as file:
+            matricula = file.read()
+        data.append(matricula)
+    return data
 
 def display_bounding_box(image, box, color=(0, 255, 0)):
     print(box)
@@ -53,3 +60,4 @@ def crop_plate(bounding_box, image):
         cropped_plate = image[y1:y2, x1:x2]
         return cropped_plate
 
+    return None

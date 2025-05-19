@@ -4,8 +4,11 @@
 
 from ultralytics.models import YOLO
 
-model = YOLO("models/yolov8n.pt")
+# model = YOLO("models/yolov8n.pt")
+# model_cotxe = YOLO("car_yolo/runs/train_fast/yolov8n_cotxes2/weights/best.pt")
+# results = model_cotxe.val()
 
+# results = model.val()
 #FASE TRAINING (nomes realitzar un cop)
 '''results = model.train(
     data="car_yolo/config_car.yaml",
@@ -15,7 +18,7 @@ model = YOLO("models/yolov8n.pt")
     device="cpu",  #0 -> gpu, "cpu" -> cpu
     cache=True,         
     workers=4,          
-    project="car_yolo/runs/train_fast",
+    project="car_yolo/runs/train_fast"
     name="yolov8n_cotxes"
 )
 infer = YOLO("car_yolo/runs/train_fast/yolov8n_cotxes/weights/best.pt")

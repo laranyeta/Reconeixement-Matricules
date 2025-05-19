@@ -8,6 +8,8 @@ import cv2
 from matplotlib import pyplot as plt
 from utils import *
 import numpy as np
+from ultralytics import YOLO
+
 
 def extract_gt_xml_data(gt):
     return np.array([int(gt.find('object').find('bndbox').find('xmin').text),
@@ -49,18 +51,26 @@ def preprocess(image):
     return blurred
 
 # CALCULAR SCORE DELS CONTORNS
-def score_contour(cnt):
+def score_contour(cnt, canny):
     x, y, w, h = cv2.boundingRect(cnt)
     aspect_ratio = w / float(h)
     area = w * h
-    contour_area = cv2.contourArea(cnt)
-    density = contour_area / area if area > 0 else 0
 
-    if 2 < aspect_ratio < 6 and area > 1000:
+    mask = np.zeros_like(canny)
+    cv2.rectangle(mask, (x, y), (x + w, y + h), 255, thickness=cv2.FILLED)
+
+    edges_inside = cv2.bitwise_and(canny, canny, mask=mask)
+    num_edge_pixels = cv2.countNonZero(edges_inside)
+
+
+    # Calculate edge density (edge pixels per unit area)
+    edge_density = num_edge_pixels / area if area > 0 else 0
+
+    if 2 < aspect_ratio < 6 and area > 100:
         score = (
             -abs(aspect_ratio - 4) * 3     #penalitza -> ratio no coincideix
-            + density * 10                 #guanya -> Densitat de contrns dins de la area 
-            + min(area / 5000, 1) * 2      #guanya -> area considerable
+            + edge_density * 10                 #guanya -> Densitat de contrns dins de la area 
+            + min(area / 550, 1) * 2      #guanya -> area considerable
         )
         return score, (x, y, x + w, y + h)
     return -1, None
@@ -84,13 +94,14 @@ def preprocess_sobel(image): #treballa millor en contrasts!
 
 #LOCALITZAR MATRICULA (APLICANT SOBEL)
 def locate_plate(image, showProcess=False):
+    canny = cv2.Canny(image, 100, 200) #aplicar canny per detectar vores
     edges = preprocess_sobel(image)
-    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
+    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     scores = np.zeros(len(contours))
     bounds = np.zeros((len(contours), 4))
     for i, cnt in enumerate(contours):
-        score, bound = score_contour(cnt)
+        score, bound = score_contour(cnt,canny)
         scores[i] = score
         if bound is not None:
             bounds[i] = bound
@@ -99,10 +110,10 @@ def locate_plate(image, showProcess=False):
     best_score = scores[best_index]
     best_bound = bounds[best_index]
     if showProcess:
-        showProcess(edges, contours, image, best_bound)
+        ShowProcess(edges, contours, image, best_bound,bounds)
     return best_bound if best_score > 0 else None #nomes retorna si hi ha un bounding box acceptable
 
-def showProcess(edges, contours, image, best_bound):
+def ShowProcess(edges, contours, image, best_bound,bounds):
     fig, ax = plt.subplots(1, 4)
 
     sobel_viz = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
@@ -112,7 +123,11 @@ def showProcess(edges, contours, image, best_bound):
         cv2.drawContours(contours_img, [cnt], -1, (0, 255, 0), 2) #dibuixa contorns de la matricula
 
     best_img = image.copy()
+    # best_img = cv2.cvtColor(best_img, cv2.COLOR_GRAY2BGR)
     if best_bound is not None:
+        for bound in bounds: 
+            x1, y1, x2, y2 = bound.astype(int)
+            cv2.rectangle(best_img, (x1, y1), (x2, y2), (255, 0, 0), 2)
         x1, y1, x2, y2 = best_bound.astype(int)
         cv2.rectangle(best_img, (x1, y1), (x2, y2), (0, 255, 0), 2) #agafa el millor bounding box
 
@@ -122,7 +137,7 @@ def showProcess(edges, contours, image, best_bound):
     ax[1].imshow(contours_img, 'gray')
     ax[1].set_title('Contours')
     ax[1].axis('off')
-    ax[2].imshow(best_img, 'gray')
+    ax[2].imshow(best_img)
     ax[2].set_title('Best Bounding Box')
     ax[2].axis('off')
     ax[3].imshow(image, 'gray')
@@ -149,19 +164,29 @@ def save_test_results(image, detected, gt, error,index):
 
 # DETECCIÓ MATRICULA (cridant funcions anteriors)
 def detect_plate(image, debug=False):
-    preprocessed = preprocess(image)
-    plate_bounds = locate_plate(preprocessed, debug)
+    # preprocessed = preprocess(image)
+    plate_bounds = locate_plate(image, debug)
     return plate_bounds
 
 # FUNCIO DE TEST DE L'ALGORISME CREAT
 def test_algorithm(save=False, debug=False):
-    images = read_images('database/plates/images/')
-    gt = read_xml_files('database/plates/annotations/')
+    images = read_images('datasets/plates/images/')
+    gt = read_xml_files('datasets/plates/annotations/')
+    # model = YOLO("car_yolo/runs/train_fast/yolov8n_cotxes2/weights/best.pt")
+
+
 
     scores= np.zeros(images.__len__())-1
     errors = np.zeros(images.__len__())-1
     detected_bounds = np.zeros((images.__len__(), 4))
     for i, img in enumerate(images):
+
+        # result = model.predict(img[0], imgsz=(img[0].shape[0], img[0].shape[1]))
+        # if result[0].boxes is None or len(result[0].boxes) == 0:
+        #     print(f"Imatge {i} no detectada")
+        #     continue
+        # cropped_car = crop_car(result, img[0])
+
         bound = detect_plate(img[0], debug)
         imgGt = extract_gt_xml_data(gt[i])
 
@@ -213,4 +238,5 @@ if __name__ == "__main__":
 
     # print(images.__len__())
     # bondingBox = detect_plate(images[412][0], debug=True)
-    test_algorithm(True,False )
+    # test_algorithm(False,True)
+    test_algorithm(False,False)
