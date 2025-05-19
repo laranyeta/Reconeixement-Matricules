@@ -26,6 +26,7 @@ class ImageToPlateNumber:
             
             matricula  = self.predict(image)
             if matricula != None and matricula == labels[i]:
+                print(f"Imatge {i} coincideix: {matricula} == {labels[i]}")
                 matricules_detectades += 1
             else:
                 print(f"Imatge {i} no coincideix: {matricula} != {labels[i]}")
@@ -34,6 +35,9 @@ class ImageToPlateNumber:
 
     def detectCar(self, image):
         result = self.CarDetector.predict(image,imgsz=(image.shape[0], image.shape[1]))
+        if result[0].boxes is None or len(result[0].boxes) == 0:
+            print("No s'ha detectat cap cotxe")
+            return None,None
         cropped_car = crop_car(result, image)
         return cropped_car,result
 
@@ -49,11 +53,14 @@ class ImageToPlateNumber:
 
     def predict(self, image): 
         car,cropping_result = self.detectCar(image)
+        if car is None:
+            print("No s'ha detectat cap cotxe")
+            return None
         plate = self.detectPlate(car)
         if plate is None:
             print("No s'ha detectat cap matricula")
             return None
-        plate_number = self.predictPlateNumber(plate)
+        plate_number,_,_ = self.predictPlateNumber(plate)
         return plate_number
 
     def processImage(self, index = -1):

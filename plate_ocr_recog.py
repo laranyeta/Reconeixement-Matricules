@@ -9,7 +9,7 @@
 import os
 import cv2
 import numpy as np
-# import pickle
+import pickle
 # from sklearn.preprocessing import LabelEncoder
 # from sklearn.model_selection import train_test_split
 # from keras.api._tf_keras.keras.utils import to_categorical
@@ -127,6 +127,9 @@ def evalueate_model(dataset_path):
         label_encoder = pickle.load(f)
     model.evaluate(X_test, y_test) #validar el model
 
+model = load_model("models/cnn_plate.h5")
+with open("label_encoder.pkl", "rb") as f:
+    label_encoder = pickle.load(f)
 def preprocess(img): #resize a 32x32 i normalitzacio
     img = cv2.resize(img, (32, 32))
     img = img / 255.0
